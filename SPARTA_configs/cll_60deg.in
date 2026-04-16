@@ -1,0 +1,134 @@
+#################################################################################
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed                12345
+dimension           3
+global              gridcut 0.0 comm/sort yes surfs explicit/distributed #prevent allocation all surf on each processor
+
+boundary            o o o
+create_box          -3e-6 3e-6 0 3e-6 -2.6e-6 2.6e-6
+create_grid         500 300 300 
+balance_grid        rcb cell
+
+write_grid test.grid
+
+fix                 1 balance 1000 1.1 rcb part
+
+global              nrho 1.46e15 fnum 1e-6
+species             air.species N2 O2 O RO RO2 RN2 
+# mixture             atm N2 O2 O vstream 6928.203230275509 -4000.000000000001 0.0 temp 400 # 60deg
+mixture             atm N2 O2 O vstream 6867.5815 -3965.0000 0.0 temp 400 # 60deg
+mixture             atm O frac 0.74454 #0.623 #
+mixture             atm N2 frac 0.2423 #0.355 #
+mixture             atm O2 frac 0.01315 #0.022 #
+mixture             atm RN2 frac 0.0
+mixture             atm RO frac 0.0
+mixture             atm RO2 frac 0.0
+mixture             gas RO
+mixture             ang RO RN2 RO2 
+
+collide             vss all air.vss
+collide_modify      vibrate smooth
+
+global              surfmax 30000
+read_surf           Ge_Si_ExpUCB_5x5 group rocket trans 0 0 0 clip
+
+# surf_collide        1 cll 15000 0.3 0.7 0.0 0.0
+surf_collide        1 cll 36000 0.05 0.9 0.0 0.0
+
+surf_react        	1 prob atm.surf
+surf_modify         rocket collide 1 react 1
+
+#bound_modify        ylo collide 1 react 1
+
+# Beam
+fix                 mycheck grid/check 1 error
+fix                 in emit/face atm xlo yhi
+timestep            1e-8
+
+stats_style         step elaplong cpu np nattempt ncoll ngrid maxlevel dt
+
+collide_modify      vremax 100 yes
+
+dump                dimage3 image all 100 image1.*.ppm vx type pdiam 2.e-4 view 90 90&
+						  box yes 0.01 surf one 0.01 size 1024 512 zoom 1.25 #gline yes 0.005 #grid proc
+dump_modify         dimage3 pad 6 scolor * black backcolor white glinecolor gray boxcolor magenta &
+                          cmap particle 0 3500 cf 0 5 min blue 0.25 cyan 0.5 green 0.75 yellow max red
+
+dump                2 image all 100 image.*.ppm type type pdiam 0.0001 surf proc 0.009 size 512 512 zoom 1.75 gline no 0.005 
+dump_modify	        2 pad 4
+
+
+
+
+compute            cgrid grid all gas nrho u v w tvib trot n massrho ke kerho
+compute            cthermal thermal/grid all gas temp press
+fix                fgrid ave/grid all 1 100 100 c_cgrid[1*4] c_cthermal[1] c_cgrid[5*8] c_cthermal[2] c_cgrid[9*10] ave one #instead of 1 100000 100000 
+# compute            clambda lambda/grid f_fgrid[1] f_fgrid[5] N2 kall #- Knudsen number
+
+
+compute            cgrid2 grid all atm nrho u v w tvib trot n massrho ke kerho
+compute            cthermal2 thermal/grid all atm temp press
+fix                fgrid2 ave/grid all 1 100 100 c_cgrid2[1*4] c_cthermal2[1] c_cgrid2[5*8] c_cthermal2[2] c_cgrid2[9*10] ave one #instead of 1 100000 100000 
+# compute            clambda2 lambda/grid f_fgrid2[1] f_fgrid2[5] O kall #- Knudsen number
+
+compute            cgrid3 grid all ang nrho u v w tvib trot n massrho ke kerho
+compute            cthermal3 thermal/grid all ang temp press
+fix                fgrid3 ave/grid all 1 100 100 c_cgrid3[1*4] c_cthermal3[1] c_cgrid3[5*8] c_cthermal3[2] c_cgrid3[9*10] ave one #instead of 1 100000 100000 
+# compute            clambda3 lambda/grid f_fgrid3[1] f_fgrid3[5] O kall #- Knudsen number
+
+# # scattering computation
+region             scatter_box block -INF INF  0.0 0.0001  -INF INF
+dump               dumpScat particle ang 1000 scatter.*.dat id type x y z vx vy vz
+dump_modify        dumpScat region scatter_box
+
+#                  to calculate the timestep of N2
+compute           1 grid all atm nrho temp usq vsq wsq
+compute           2 thermal/grid all atm temp
+fix               11 ave/grid all 1 10 10 c_1[*] c_2[1]
+
+compute           spn count N2
+compute           spo count O
+compute           spo2 count O2 
+compute           sprn count RN2
+compute           spro count RO
+compute           spro2 count RO2 
+
+#new addition to observe change in properties with time
+dump               dgrid2 grid all 1000 prop_grid_gas.*.dat id xlo ylo zlo f_fgrid[*] c_cgrid[7] #c_clambda[*] 
+
+#                                       nrho u v w tmp tvib trot n massrho pressure ke kerho instantaneous_n
+dump               dgridN2 grid all 1000 prop_grid_atm.*.dat id xlo ylo zlo f_fgrid2[*] c_cgrid2[7] #c_clambda2[*] 
+dump               dgridN3 grid all 1000 prop_grid_ang.*.dat id xlo ylo zlo f_fgrid3[*] c_cgrid3[7] #c_clambda3[*] 
+ 
+
+#                              surface properties calculation and dump file 
+compute            forces_circle surf all all n press fx fy fz px py pz shx shy shz mflux
+fix                forces_circle2 ave/surf all 1 100 100 c_forces_circle[*] ave one #instead of 1 1000000 1000000
+compute            fcircle reduce sum f_forces_circle2[3] #f_forces_circle[6] 
+dump               forces_circle surf all 1000 prop_surfos.*.dat id v1x v1y v1z v2x v2y v2z v3x v3y &
+                    v3z f_forces_circle2[*] c_forces_circle[1] area #c_fcircle[*]
+
+
+
+#                               dump image with surf property and grid plane property
+
+dump               surfcon image all 100 surfwunos.*.ppm type type particle no view 70 120 size 1024 1024 & 
+                   zoom 1.1 axes yes 0.9 0.02 gridy 0.0 f_fgrid2[4] gridz 0.05 f_fgrid2[9] surf f_forces_circle2[2] 0.0  
+dump_modify        surfcon pad 7 
+dump_modify        surfcon cmap surf 0 0.1 cf 0.0 5 min blue 0.25 cyan 0.5 green 0.75 yellow max red  
+dump_modify        surfcon cmap gridy min max cf 0.0 5 min blue 0.25 cyan 0.5 green 0.75 yellow max red
+dump_modify        surfcon cmap gridz 1e-11 4e-10 cf 0.0 5 min blue 0.25 cyan 0.5 green 0.75 yellow max red
+
+stats               100
+stats_style         step cpu np nattempt ncoll ngrid c_spo c_spn c_spo2 c_spro c_sprn c_spro2 nscollave nsreactave 
+
+run                 10000
+
+write_surf          final.surf
+write_grid          final.grid

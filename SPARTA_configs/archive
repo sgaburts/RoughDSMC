@@ -1,0 +1,16 @@
+#!/bin/bash
+
+destination="$1"
+
+# Create the destination folder if it doesn't exist
+mkdir -p "$destination"
+
+mv *.*.ppm "$destination/"
+mv *.*.dat "$destination/"
+mv *.dat "$destination/"
+mv *.ppm "$destination/"
+mv *.pvd "$destination/"
+mv grid_output_* "$destination/"
+mv surf_output "$destination/"
+mv log.sparta "$destination/"
+cp collision.in "$destination/"

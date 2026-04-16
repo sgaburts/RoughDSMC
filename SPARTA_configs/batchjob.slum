@@ -1,0 +1,70 @@
+#!/bin/bash
+#----------------------------------------------------
+# Sample Slurm job script
+#   for TACC Lonestar6 AMD Milan nodes
+#
+#   *** MPI Job in Normal Queue ***
+# 
+# Last revised: October 22, 2021
+#
+# Notes:
+#
+#   -- Launch this script by executing
+#      "sbatch milan.mpi.slurm" on a Lonestar6 login node.
+#
+#   -- Use ibrun to launch MPI codes on TACC systems.
+#      Do NOT use mpirun or mpiexec.
+#
+#   -- Max recommended MPI ranks per Milan node: 128
+#      (start small, increase gradually).
+#
+#   -- If you're running out of memory, try running
+#      fewer tasks per node to give each task more memory.
+#
+#----------------------------------------------------
+
+#SBATCH -J sparta           # Job name
+#SBATCH -o %x.o%j       # Name of stdout output file
+#SBATCH -e %x.o%j       # Name of stderr error file
+#SBATCH -p spr          # Queue (partition) name
+#SBATCH -N 10               # Total # of nodes 
+#SBATCH -n 896              # Total # of mpi tasks
+#SBATCH -t 24:00:00        # Run time (hh:mm:ss)
+#SBATCH --mail-type=end    # Send email at begin and end of job
+#SBATCH --mail-user=username@tacc.utexas.edu
+#SBATCH -A CTS24014       # Allocation name (req'd if you have more than 1)
+
+module use /scratch/projects/compilers/modulefiles
+module load intel/25.3
+module load impi/21.17
+module list 2>&1
+
+# ibrun /home1/09537/sgaburts/sparta/src/spa_bgq_big < cll_30deg.in
+# wait
+# ./archive cll_30
+# wait
+
+# ibrun /home1/09537/sgaburts/sparta/src/spa_bgq_big < cll_40deg.in
+# wait
+# ./archive cll_40
+# wait
+
+ibrun /home1/09537/sgaburts/sparta/src/spa_bgq_big < cll_70deg.in
+wait
+./archive new_cll70_70
+wait
+
+ibrun /home1/09537/sgaburts/sparta/src/spa_bgq_big < cll_50deg.in
+wait
+./archive new_cll70_50
+wait
+
+ibrun /home1/09537/sgaburts/sparta/src/spa_bgq_big < cll_60deg.in
+wait
+./archive new_cll70_60
+wait
+
+ibrun /home1/09537/sgaburts/sparta/src/spa_bgq_big < cll_80deg.in
+wait
+./archive new_cll70_80
+wait
