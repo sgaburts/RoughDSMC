@@ -1,0 +1,61 @@
+#!/bin/bash
+#----------------------------------------------------
+# Sample Slurm job script
+#   for TACC Lonestar6 AMD Milan nodes
+#
+#   *** MPI Job in Normal Queue ***
+# 
+# Last revised: October 22, 2021
+#
+# Notes:
+#
+#   -- Launch this script by executing
+#      "sbatch milan.mpi.slurm" on a Lonestar6 login node.
+#
+#   -- Use ibrun to launch MPI codes on TACC systems.
+#      Do NOT use mpirun or mpiexec.
+#
+#   -- Max recommended MPI ranks per Milan node: 128
+#      (start small, increase gradually).
+#
+#   -- If you're running out of memory, try running
+#      fewer tasks per node to give each task more memory.
+#
+#----------------------------------------------------
+
+#SBATCH -J pprocess           # Job name
+#SBATCH -o %x.o%j       # Name of stdout output file
+#SBATCH -e %x.o%j       # Name of stderr error file
+#SBATCH -p skx-dev          # Queue (partition) name
+#SBATCH -N 1               # Total # of nodes 
+#SBATCH -n 48              # Total # of mpi tasks
+#SBATCH -t 00:30:00        # Run time (hh:mm:ss)
+#SBATCH --mail-type=end    # Send email at begin and end of job
+#SBATCH --mail-user=username@tacc.utexas.edu
+#SBATCH -A CTS24014       # Allocation name (req'd if you have more than 1)
+
+
+module load paraview
+
+dir_list=("best_400K_fnum1e2" "conservative_400K_fnum1e2" "uncoated_400K_fnum1e2")
+
+for dir in "${dir_list[@]}"; do
+    rm *.pvd
+    rm "$dir/*.pvd"
+    rm -rf "$dir/surf_output"
+    rm -rf "$dir/grid_output_*"
+
+    /opt/apps/paraview/5.12.0/bin/pvpython surf2paraview.py final.surf surf_output -r "$dir/prop_surfos.1000.dat"
+    wait
+    /opt/apps/paraview/5.12.0/bin/pvpython grid2paraview.py grid2paraview.txt grid_output_atm -r "$dir/prop_grid_atm.1000.dat"
+    wait
+    /opt/apps/paraview/5.12.0/bin/pvpython grid2paraview.py grid2paraview.txt grid_output_ang -r "$dir/prop_grid_ang.1000.dat" 
+    wait
+    /opt/apps/paraview/5.12.0/bin/pvpython grid2paraview.py grid2paraview.txt grid_output_gas -r "$dir/prop_grid_gas.1000.dat"
+    wait
+    mv surf_output $dir
+    mv grid_output_atm $dir
+    mv grid_output_ang $dir
+    mv grid_output_gas $dir
+
+done

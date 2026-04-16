@@ -1,0 +1,5 @@
+dimension   	    3
+create_box          -0.0002 0.0002 0 0.0002 -0.000133 0.000133
+# create_grid         400 300 160 
+read_grid           test.grid
+# read_grid           final.grid
